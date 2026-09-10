@@ -10,7 +10,8 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "e2e": "npm run build && playwright test",
-    "check": "npm run typecheck && npm test && npm run e2e"
+    "check": "npm run typecheck && npm test && npm run e2e",
+    "try": "npm run build && node scripts/try-extension.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
