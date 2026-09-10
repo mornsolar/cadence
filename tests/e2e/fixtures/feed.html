@@ -51,6 +51,24 @@
       if (event.key === 'ArrowUp') goTo(index - 1);
     });
     if (!isProfile) history.replaceState({}, '', permalink(0));
+
+    // Reproduces the real bug this fixture exists to catch: TikTok and YouTube
+    // Shorts don't auto-advance when a clip finishes, they loop it in place, and
+    // some players do that by swapping in a fresh <video> element rather than
+    // rewinding the existing one. No URL change, no user input — just a new node
+    // at the same spot. A test can call this with no preceding gesture to prove
+    // that alone must never be counted as a swipe.
+    window.__cadenceFixture = {
+      loopCurrentVideo() {
+        const card = document.querySelector(`.card[data-index="${index}"]`);
+        const old = card?.querySelector('video');
+        if (!old) return;
+        const next = document.createElement('video');
+        next.muted = true;
+        next.playsInline = true;
+        old.replaceWith(next);
+      },
+    };
   </script>
 </body>
 </html>

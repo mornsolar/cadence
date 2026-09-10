@@ -19,6 +19,15 @@ export const SETTINGS_LIMITS = {
 /** Two detection sources reporting the same transition inside this window count once. */
 export const DEDUPE_WINDOW_MS = 400;
 
+/**
+ * A card change only counts if a scroll, swipe or arrow-key gesture happened this
+ * recently beforehand. Without this, a clip that finishes and loops back to itself
+ * (some players swap in a fresh <video> element to do it) looks identical to a real
+ * skip. A real transition lands well inside this window; a loop only happens after
+ * the clip's full playback, which takes far longer.
+ */
+export const GESTURE_WINDOW_MS = 1500;
+
 /** URL polling interval for platforms that update history without events. */
 export const URL_POLL_INTERVAL_MS = 250;
 

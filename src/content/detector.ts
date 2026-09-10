@@ -2,8 +2,14 @@
  * Emits one 'card-change' per completed transition to a different content card.
  * Two sources: the URL's content id, and the <video> that dominates the viewport.
  * A change from either counts; the other source is ignored inside the dedupe window.
+ *
+ * A change only counts if it follows a scroll, swipe or arrow-key gesture within
+ * GESTURE_WINDOW_MS. Without that, a clip that finishes and loops back to itself
+ * (TikTok and YouTube Shorts do this instead of auto-advancing) looks identical to
+ * a real skip: some players swap in a fresh <video> element to loop it, which reads
+ * as a "dominant video changed" event with nothing else to distinguish it.
  */
-import { DEDUPE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../shared/constants';
+import { DEDUPE_WINDOW_MS, GESTURE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../shared/constants';
 import type { PlatformAdapter } from './platforms/types';
 
 export type CardChangeSource = 'url' | 'video';
@@ -28,6 +34,9 @@ export interface Detector {
 
 const DOMINANT_RATIO = 0.5;
 
+/** Keys that move to the next or previous card; a plain Space or Enter is a play/pause toggle, not navigation. */
+const NAV_KEYS = new Set(['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp']);
+
 export function createDetector(deps: DetectorDeps): Detector {
   const { adapter, window, document, onCardChange } = deps;
   const now = deps.now ?? (() => Date.now());
@@ -35,6 +44,7 @@ export function createDetector(deps: DetectorDeps): Detector {
   let lastUrlId: string | null = null;
   let lastDominant: Element | null = null;
   let lastEmit: { at: number; source: CardChangeSource } | null = null;
+  let lastGestureAt = -Infinity;
   let pollHandle: number | null = null;
   let intersection: IntersectionObserver | null = null;
   let mutation: MutationObserver | null = null;
@@ -46,11 +56,33 @@ export function createDetector(deps: DetectorDeps): Detector {
     return new URL(window.location.href);
   }
 
+  function markGesture(): void {
+    lastGestureAt = now();
+  }
+
+  function onWheel(): void {
+    markGesture();
+  }
+
+  function onTouchProgress(): void {
+    markGesture();
+  }
+
+  function onKeydown(event: KeyboardEvent): void {
+    if (NAV_KEYS.has(event.key)) markGesture();
+  }
+
   function emit(source: CardChangeSource, id: string): void {
     if (!adapter.isSurface(currentUrl())) return;
     const at = now();
+    if (at - lastGestureAt > GESTURE_WINDOW_MS) return;
     if (lastEmit !== null && lastEmit.source !== source && at - lastEmit.at < DEDUPE_WINDOW_MS) return;
     lastEmit = { at, source };
+    // A gesture only authorises the one transition it caused. Consuming it here
+    // means a clip that loops moments after a real swipe (short clips can loop
+    // inside the gesture window) still needs its own gesture to count, rather
+    // than riding on the swipe that brought the viewer to it.
+    lastGestureAt = -Infinity;
     onCardChange({ source, id });
   }
 
@@ -130,6 +162,11 @@ export function createDetector(deps: DetectorDeps): Detector {
     document.addEventListener('yt-navigate-finish', checkUrl);
     pollHandle = window.setInterval(checkUrl, URL_POLL_INTERVAL_MS);
 
+    window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('touchmove', onTouchProgress, { passive: true });
+    window.addEventListener('touchend', onTouchProgress, { passive: true });
+    window.addEventListener('keydown', onKeydown);
+
     intersection = new window.IntersectionObserver(onIntersections, { threshold: [0, DOMINANT_RATIO, 1] });
     const observer = new window.MutationObserver(onMutations);
     observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -142,6 +179,10 @@ export function createDetector(deps: DetectorDeps): Detector {
     document.removeEventListener('yt-navigate-finish', checkUrl);
     if (pollHandle !== null) window.clearInterval(pollHandle);
     pollHandle = null;
+    window.removeEventListener('wheel', onWheel);
+    window.removeEventListener('touchmove', onTouchProgress);
+    window.removeEventListener('touchend', onTouchProgress);
+    window.removeEventListener('keydown', onKeydown);
     intersection?.disconnect();
     mutation?.disconnect();
     intersection = null;

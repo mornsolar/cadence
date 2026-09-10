@@ -55,6 +55,28 @@ test('mode B: the tenth swipe shows the checkpoint, blocks the feed, and Keep go
   expect(events[2]?.choice).toBe('continue');
 });
 
+test('a clip looping in place is never counted as a swipe, even soon after a real one', async () => {
+  await open('https://www.tiktok.com/foryou');
+  await swipe(5);
+  expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(5);
+
+  // Simulate the clip finishing and looping via a replaced <video> element —
+  // what TikTok and YouTube Shorts actually do instead of auto-advancing —
+  // several times, with no wheel/touch/key event anywhere near it, including
+  // right after the real swipes above (the tightest case for the gesture gate).
+  for (let i = 0; i < 4; i += 1) {
+    await harness.page.evaluate(() => (window as unknown as { __cadenceFixture: { loopCurrentVideo(): void } }).__cadenceFixture.loopCurrentVideo());
+    await harness.page.waitForTimeout(120);
+  }
+  expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(5);
+  await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
+
+  // A real swipe right after is still picked up correctly.
+  await swipe(5);
+  expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(10);
+  await expect(harness.page.locator(OVERLAY)).toBeVisible();
+});
+
 test("mode B: I'm done lands on the quiet stopped page with the swipe count", async () => {
   await open('https://www.tiktok.com/foryou');
   await swipe(10);
