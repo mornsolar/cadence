@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Cadence",
+  "version": "0.1.0",
+  "description": "A quiet checkpoint for short-form video. Pauses the feed after a set number of swipes and hands the decision back to you.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage", "alarms", "notifications"],
+  "host_permissions": [
+    "https://www.tiktok.com/*",
+    "https://www.instagram.com/*",
+    "https://www.youtube.com/*"
+  ],
+  "action": {
+    "default_title": "Cadence"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.tiktok.com/*",
+        "https://www.instagram.com/*",
+        "https://www.youtube.com/*"
+      ],
+      "js": ["content/index.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["stopped/stopped.html"],
+      "matches": [
+        "https://www.tiktok.com/*",
+        "https://www.instagram.com/*",
+        "https://www.youtube.com/*"
+      ]
+    }
+  ]
+}

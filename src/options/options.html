@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadence</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>Cadence</h1>
+    <p class="lede">A quiet checkpoint for short-form video. Everything here stays on this device.</p>
+
+    <section aria-labelledby="mode-title">
+      <h2 id="mode-title">What happens at the checkpoint</h2>
+      <div id="modes" class="modes"></div>
+    </section>
+
+    <section aria-labelledby="rules-title">
+      <h2 id="rules-title">Rules</h2>
+      <div class="field">
+        <label for="swipeThreshold">Swipes before the checkpoint</label>
+        <input id="swipeThreshold" name="swipeThreshold" type="number" min="1" max="500" step="1">
+      </div>
+      <div class="field">
+        <label for="idleGapMinutes">Minutes without a swipe that end a session</label>
+        <input id="idleGapMinutes" name="idleGapMinutes" type="number" min="1" max="1440" step="1">
+      </div>
+      <div class="field" id="cooldown-field">
+        <label for="cooldownMinutes">Minutes the feed stays paused (hard pause only)</label>
+        <input id="cooldownMinutes" name="cooldownMinutes" type="number" min="1" max="1440" step="1">
+      </div>
+      <p class="hint">A swipe is a completed move to a different video. Cancelled drags and taps on like, comment or share do not count. The count is shared across TikTok, Reels and Shorts and across tabs.</p>
+      <p id="problems" class="problems" aria-live="polite"></p>
+    </section>
+
+    <section aria-labelledby="platforms-title">
+      <h2 id="platforms-title">Where</h2>
+      <div id="platforms" class="platforms"></div>
+    </section>
+
+    <section aria-labelledby="diary-title" id="diary">
+      <h2 id="diary-title">Check-in</h2>
+      <label for="diaryText" id="diary-prompt"></label>
+      <textarea id="diaryText" rows="4"></textarea>
+      <div class="row">
+        <button id="diarySave" type="button"></button>
+        <span id="diaryStatus" aria-live="polite"></span>
+      </div>
+      <ul id="diaryEntries" class="entries"></ul>
+    </section>
+
+    <section aria-labelledby="data-title">
+      <h2 id="data-title">Record</h2>
+      <p id="summary7"></p>
+      <p id="summary28"></p>
+      <p class="hint" id="keep-logging-note"></p>
+      <div class="row">
+        <button id="exportJson" type="button">Export JSON</button>
+        <button id="exportCsv" type="button">Export CSV</button>
+        <button id="clearData" type="button" class="quiet">Erase record</button>
+      </div>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

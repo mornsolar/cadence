@@ -1,0 +1,25 @@
+{
+  "name": "cadence",
+  "version": "0.1.0",
+  "description": "An agency-returning swipe checkpoint for short-form video (desktop web).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "e2e": "npm run build && playwright test",
+    "check": "npm run typecheck && npm test && npm run e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/chrome": "^0.1.1",
+    "@types/node": "^24.13.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "esbuild": "^0.25.9",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

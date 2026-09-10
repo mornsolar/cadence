@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fixture feed</title>
+  <style>
+    html, body { margin: 0; background: #111; color: #eee; font-family: sans-serif; }
+    .card { height: 100vh; display: grid; place-items: center; font-size: 3rem; }
+    video { width: 1px; height: 1px; opacity: 0; }
+  </style>
+</head>
+<body>
+  <main id="feed"></main>
+  <script>
+    // Mimics a desktop short-form feed: one full-viewport card at a time, a wheel tick
+    // moves to the next card, and the URL updates to the card's permalink. On a
+    // non-feed path (a profile page) the URL never changes, like a profile grid.
+    const CARDS = 40;
+    const host = location.hostname;
+    const path = location.pathname;
+    const permalink = (i) => {
+      if (host.includes('tiktok')) return `/@fixture/video/7000000000${String(i).padStart(9, '0')}`;
+      if (host.includes('instagram')) return `/reels/FIX${String(i).padStart(4, '0')}/`;
+      return `/shorts/fix${String(i).padStart(7, '0')}`;
+    };
+    const isProfile = /^\/@[^/]+\/?$/.test(path) && host.includes('tiktok');
+
+    const feed = document.getElementById('feed');
+    for (let i = 0; i < CARDS; i += 1) {
+      const card = document.createElement('section');
+      card.className = 'card';
+      card.dataset.index = String(i);
+      card.innerHTML = `<span>card ${i}</span><video muted playsinline></video>`;
+      feed.appendChild(card);
+    }
+
+    let index = 0;
+    function goTo(next) {
+      index = Math.max(0, Math.min(CARDS - 1, next));
+      window.scrollTo({ top: index * window.innerHeight, behavior: 'instant' });
+      if (!isProfile) history.pushState({}, '', permalink(index));
+      document.title = `card ${index}`;
+    }
+    window.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      if (event.deltaY > 0) goTo(index + 1);
+      else if (event.deltaY < 0) goTo(index - 1);
+    }, { passive: false });
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') goTo(index + 1);
+      if (event.key === 'ArrowUp') goTo(index - 1);
+    });
+    if (!isProfile) history.replaceState({}, '', permalink(0));
+  </script>
+</body>
+</html>
