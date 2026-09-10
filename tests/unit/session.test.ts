@@ -19,7 +19,7 @@ function swipes(count: number, settings: Settings = DEFAULT_SETTINGS, start: Ses
   let state = start;
   const effects = [];
   for (let i = 0; i < count; i += 1) {
-    const result = reduceSession(state, { type: 'swipe', platform: 'tiktok' }, ctx({ now: T0 + i * 1000, settings }));
+    const result = reduceSession(state, { type: 'swipe', platform: 'tiktok', wasSkip: true }, ctx({ now: T0 + i * 1000, settings }));
     state = result.state;
     effects.push(...result.effects);
   }
@@ -28,7 +28,7 @@ function swipes(count: number, settings: Settings = DEFAULT_SETTINGS, start: Ses
 
 describe('reduceSession: starting', () => {
   test('first swipe starts a session with count 1 and emits sessionStarted', () => {
-    const { state, effects } = reduceSession(null, { type: 'swipe', platform: 'youtube' }, ctx());
+    const { state, effects } = reduceSession(null, { type: 'swipe', platform: 'youtube', wasSkip: true }, ctx());
 
     expect(state).toMatchObject({ sessionId: 'sid', swipeCount: 1, swipesSinceCheckpoint: 1, triggerCount: 0, lockedUntil: null });
     expect(state?.startedAt).toBe('2026-09-10T02:00:00.000Z');
@@ -36,10 +36,10 @@ describe('reduceSession: starting', () => {
   });
 
   test('does not mutate the previous state object', () => {
-    const first = reduceSession(null, { type: 'swipe', platform: 'tiktok' }, ctx()).state;
+    const first = reduceSession(null, { type: 'swipe', platform: 'tiktok', wasSkip: true }, ctx()).state;
     const frozen = Object.freeze({ ...first! });
 
-    const second = reduceSession(frozen, { type: 'swipe', platform: 'tiktok' }, ctx({ now: T0 + 1000 })).state;
+    const second = reduceSession(frozen, { type: 'swipe', platform: 'tiktok', wasSkip: true }, ctx({ now: T0 + 1000 })).state;
 
     expect(frozen.swipeCount).toBe(1);
     expect(second?.swipeCount).toBe(2);
@@ -108,7 +108,7 @@ describe('reduceSession: mode A lock', () => {
 
   test('swipes while locked are ignored entirely', () => {
     const { state: locked } = swipes(10, modeA);
-    const result = reduceSession(locked, { type: 'swipe', platform: 'tiktok' }, ctx({ now: T0 + 60_000, settings: modeA }));
+    const result = reduceSession(locked, { type: 'swipe', platform: 'tiktok', wasSkip: true }, ctx({ now: T0 + 60_000, settings: modeA }));
 
     expect(result.state).toBe(locked);
     expect(result.effects).toEqual([]);
@@ -136,11 +136,53 @@ describe('reduceSession: mode A lock', () => {
   });
 });
 
+describe('reduceSession: swiping onward after finishing a video is not a skip', () => {
+  test('a non-skip swipe refreshes lastSwipeAt but does not advance the count or trigger', () => {
+    const { state: before } = swipes(9); // nine real skips, one short of the threshold
+    const { state, effects } = reduceSession(
+      before,
+      { type: 'swipe', platform: 'tiktok', wasSkip: false },
+      ctx({ now: T0 + 20_000 }),
+    );
+
+    expect(effects).toEqual([]);
+    expect(state?.swipeCount).toBe(9);
+    expect(state?.swipesSinceCheckpoint).toBe(9);
+    expect(state?.lastSwipeAt).toBe(new Date(T0 + 20_000).toISOString());
+  });
+
+  test('the example from the request: 8 real skips among 30 total videos never trigger the checkpoint, with a threshold of 10', () => {
+    let state: SessionState | null = null;
+    let triggerCount = 0;
+    for (let i = 0; i < 30; i += 1) {
+      const wasSkip = i < 8; // the first 8 are abandoned early; the remaining 22 are watched to the end
+      const result = reduceSession(state, { type: 'swipe', platform: 'tiktok', wasSkip }, ctx({ now: T0 + i * 1000 }));
+      state = result.state;
+      triggerCount += result.effects.filter((e) => e.type === 'trigger').length;
+    }
+    expect(triggerCount).toBe(0); // 8 real skips is under the threshold of 10, so all 30 videos play uninterrupted
+    expect(state?.swipeCount).toBe(8); // the recorded count is skips only, not all 30 transitions
+  });
+
+  test('a non-skip swipe still starts a session if none exists', () => {
+    const { state, effects } = reduceSession(null, { type: 'swipe', platform: 'tiktok', wasSkip: false }, ctx());
+    expect(state).toMatchObject({ sessionId: 'sid', swipeCount: 0, swipesSinceCheckpoint: 0 });
+    expect(effects).toEqual([{ type: 'sessionStarted', sessionId: 'sid', platform: 'tiktok' }]);
+  });
+
+  test('a non-skip swipe while locked in mode A is still ignored, like a real skip would be', () => {
+    const modeA: Settings = { ...DEFAULT_SETTINGS, mode: 'A' };
+    const { state: locked } = swipes(10, modeA);
+    const result = reduceSession(locked, { type: 'swipe', platform: 'tiktok', wasSkip: false }, ctx({ now: T0 + 60_000, settings: modeA }));
+    expect(result).toEqual({ state: locked, effects: [] });
+  });
+});
+
 describe('reduceSession: idle boundary', () => {
   test('a swipe after the idle gap ends the old session and starts a new one', () => {
     const { state: before } = swipes(4);
     const later = T0 + 3000 + 6 * MINUTE;
-    const { state, effects } = reduceSession(before, { type: 'swipe', platform: 'instagram' }, ctx({ now: later, newId: () => 'sid2' }));
+    const { state, effects } = reduceSession(before, { type: 'swipe', platform: 'instagram', wasSkip: true }, ctx({ now: later, newId: () => 'sid2' }));
 
     expect(effects).toEqual([
       { type: 'sessionEnded', sessionId: 'sid', swipes: 4, durationMs: 3000, reason: 'idle', endedAt: new Date(T0 + 3000).toISOString() },
@@ -151,7 +193,7 @@ describe('reduceSession: idle boundary', () => {
 
   test('a swipe inside the idle gap continues the same session', () => {
     const { state: before } = swipes(4);
-    const { state, effects } = reduceSession(before, { type: 'swipe', platform: 'tiktok' }, ctx({ now: T0 + 3000 + 4 * MINUTE }));
+    const { state, effects } = reduceSession(before, { type: 'swipe', platform: 'tiktok', wasSkip: true }, ctx({ now: T0 + 3000 + 4 * MINUTE }));
     expect(effects).toEqual([]);
     expect(state?.swipeCount).toBe(5);
   });

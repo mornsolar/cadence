@@ -63,10 +63,10 @@ describe('controller', () => {
     await controller.start();
   }
 
-  async function swipe(times = 1) {
+  async function swipe(times = 1, wasSkip = true) {
     for (let i = 0; i < times; i += 1) {
       clock += 1000;
-      await controller.onCardChange({ source: 'url', id: String(clock) });
+      await controller.onCardChange({ source: 'url', id: String(clock), wasSkip });
     }
   }
 
@@ -157,6 +157,30 @@ describe('controller', () => {
     await swipe(10);
     expect(overlay.isVisible()).toBe(false);
     expect((await events()).map((e) => e.type)).toEqual(['session_start', 'trigger']);
+  });
+
+  test('watching a video to the end and swiping onward does not count against the threshold', async () => {
+    await boot();
+    await swipe(9); // nine real skips
+    expect(overlay.isVisible()).toBe(false);
+    await swipe(20, false); // twenty swipes onward after finishing each video, not skips
+    expect(overlay.isVisible()).toBe(false);
+    expect((await storage.get(['session'])).session?.swipeCount).toBe(9);
+
+    await swipe(1); // the tenth real skip
+    expect(overlay.isVisible()).toBe(true);
+    const log = await events();
+    expect(log.map((e) => e.type)).toEqual(['session_start', 'trigger']);
+    expect(log[1]).toMatchObject({ swipeCount: 10 });
+  });
+
+  test('the example from the request: 8 real skips among 30 total videos never show the checkpoint', async () => {
+    await boot();
+    await swipe(8, true);
+    await swipe(22, false);
+    expect(overlay.isVisible()).toBe(false);
+    expect((await storage.get(['session'])).session?.swipeCount).toBe(8);
+    expect(await events()).toEqual([{ type: 'session_start', at: expect.any(String), sessionId: 's1', platform: 'tiktok' }]);
   });
 
   test('a disabled platform is ignored entirely', async () => {

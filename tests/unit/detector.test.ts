@@ -72,7 +72,7 @@ describe('createDetector', () => {
     gesture();
     setUrl('/@a/video/2');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    expect(changes).toEqual([{ source: 'url', id: '2' }]);
+    expect(changes).toEqual([{ source: 'url', id: '2', wasSkip: true }]);
   });
 
   test('URL changes are picked up by polling when no event fires', () => {
@@ -80,7 +80,7 @@ describe('createDetector', () => {
     gesture();
     setUrl('/@a/video/3');
     vi.advanceTimersByTime(URL_POLL_INTERVAL_MS);
-    expect(changes).toEqual([{ source: 'url', id: '3' }]);
+    expect(changes).toEqual([{ source: 'url', id: '3', wasSkip: true }]);
   });
 
   test('yt-navigate-finish is honoured for youtube', () => {
@@ -89,7 +89,7 @@ describe('createDetector', () => {
     gesture();
     setUrl('/shorts/bbb');
     document.dispatchEvent(new Event('yt-navigate-finish'));
-    expect(changes).toEqual([{ source: 'url', id: 'bbb' }]);
+    expect(changes).toEqual([{ source: 'url', id: 'bbb', wasSkip: true }]);
   });
 
   test('same URL id repeated does not emit; going back to a previous id does', () => {
@@ -133,7 +133,7 @@ describe('createDetector', () => {
     expect(changes).toEqual([]);
     gesture();
     io().fire([{ target: v1, ratio: 0.2 }, { target: v2, ratio: 0.8 }]);
-    expect(changes).toEqual([{ source: 'video', id: 'v2' }]);
+    expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
   });
 
   test('a momentary state with no dominant video does not break the transition', async () => {
@@ -145,7 +145,7 @@ describe('createDetector', () => {
     io().fire([{ target: v1, ratio: 1 }]);
     io().fire([{ target: v1, ratio: 0.4 }, { target: v2, ratio: 0.3 }]);
     io().fire([{ target: v2, ratio: 0.9 }]);
-    expect(changes).toEqual([{ source: 'video', id: 'v2' }]);
+    expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
   });
 
   test('the second source inside the dedupe window is suppressed, outside it counts', async () => {
@@ -161,13 +161,13 @@ describe('createDetector', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
     clock += 100;
     io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
-    expect(changes).toEqual([{ source: 'url', id: '2' }]);
+    expect(changes).toEqual([{ source: 'url', id: '2', wasSkip: true }]);
 
     clock += DEDUPE_WINDOW_MS;
     gesture();
     io().fire([{ target: v2, ratio: 0 }, { target: v3, ratio: 1 }]);
     expect(changes).toHaveLength(2);
-    expect(changes[1]).toEqual({ source: 'video', id: 'v3' });
+    expect(changes[1]).toEqual({ source: 'video', id: 'v3', wasSkip: true });
   });
 
   test('videos removed from the DOM are forgotten and pre-existing videos are observed at start', async () => {
@@ -219,7 +219,7 @@ describe('createDetector', () => {
       await vi.advanceTimersByTimeAsync(0);
       gesture();
       io().fire([{ target: v1Replay, ratio: 0 }, { target: v2, ratio: 1 }]);
-      expect(changes).toEqual([{ source: 'video', id: 'v3' }]);
+      expect(changes).toEqual([{ source: 'video', id: 'v3', wasSkip: true }]);
     });
 
     test('a gesture followed by a change outside the gesture window is ignored', () => {
@@ -237,7 +237,7 @@ describe('createDetector', () => {
       clock += GESTURE_WINDOW_MS;
       setUrl('/@a/video/2');
       window.dispatchEvent(new PopStateEvent('popstate'));
-      expect(changes).toEqual([{ source: 'url', id: '2' }]);
+      expect(changes).toEqual([{ source: 'url', id: '2', wasSkip: true }]);
     });
 
     test('ArrowDown and ArrowUp count as a gesture; an unrelated key does not', () => {
@@ -250,7 +250,7 @@ describe('createDetector', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
       setUrl('/@a/video/3');
       window.dispatchEvent(new PopStateEvent('popstate'));
-      expect(changes).toEqual([{ source: 'url', id: '3' }]);
+      expect(changes).toEqual([{ source: 'url', id: '3', wasSkip: true }]);
     });
 
     test("a loop happening moments after a real swipe does not ride on that swipe's gesture", async () => {
@@ -268,14 +268,14 @@ describe('createDetector', () => {
 
       gesture();
       io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]); // the real swipe
-      expect(changes).toEqual([{ source: 'video', id: 'v2' }]);
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
 
       clock += 300; // the clip on v2 finishes and loops well inside the gesture window
       const v2Replay = addVideo();
       v2.remove();
       await vi.advanceTimersByTimeAsync(0);
       io().fire([{ target: v2, ratio: 0 }, { target: v2Replay, ratio: 1 }]);
-      expect(changes).toEqual([{ source: 'video', id: 'v2' }]); // unchanged: the loop was rejected
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]); // unchanged: the loop was rejected
     });
 
     test('touchmove and touchend each count as a gesture', () => {
@@ -287,6 +287,104 @@ describe('createDetector', () => {
       setUrl('/@a/video/3');
       window.dispatchEvent(new PopStateEvent('popstate'));
       expect(changes.map((c) => c.id)).toEqual(['2', '3']);
+    });
+  });
+
+  describe('wasSkip: swiping onward after finishing a video is not a skip', () => {
+    test("swiping away from a video that fired 'ended' is not a skip", async () => {
+      build();
+      const v1 = addVideo();
+      const v2 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]); // baseline
+
+      v1.dispatchEvent(new Event('ended')); // watched all the way through
+
+      gesture();
+      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: false }]);
+    });
+
+    test('swiping away before the video ends is a skip', async () => {
+      build();
+      const v1 = addVideo();
+      const v2 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]); // baseline, never fires ended
+
+      gesture();
+      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
+    });
+
+    test("a video using the native loop attribute (no 'ended' event) is caught by playback position nearing the end", async () => {
+      build();
+      const v1 = addVideo() as HTMLVideoElement & { duration: number; currentTime: number };
+      const v2 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]); // baseline
+
+      Object.defineProperty(v1, 'duration', { value: 12, configurable: true });
+      Object.defineProperty(v1, 'currentTime', { value: 11.8, configurable: true }); // 0.2s from the end
+      v1.dispatchEvent(new Event('timeupdate'));
+
+      gesture();
+      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: false }]);
+    });
+
+    test('a timeupdate well short of the end does not mark the video finished', async () => {
+      build();
+      const v1 = addVideo() as HTMLVideoElement & { duration: number; currentTime: number };
+      const v2 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]);
+
+      Object.defineProperty(v1, 'duration', { value: 12, configurable: true });
+      Object.defineProperty(v1, 'currentTime', { value: 4, configurable: true }); // nowhere near the end
+      v1.dispatchEvent(new Event('timeupdate'));
+
+      gesture();
+      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
+    });
+
+    test('the finished flag resets for each new video, and only reflects the one just left', async () => {
+      build();
+      const v1 = addVideo();
+      const v2 = addVideo();
+      const v3 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]); // baseline
+
+      v1.dispatchEvent(new Event('ended')); // v1 watched fully
+      gesture();
+      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]); // leaving v1 (finished) -> not a skip
+      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: false }]);
+
+      // v2 is abandoned early this time, no ended event.
+      gesture();
+      io().fire([{ target: v2, ratio: 0 }, { target: v3, ratio: 1 }]); // leaving v2 (not finished) -> a skip
+      expect(changes[1]).toEqual({ source: 'video', id: 'v3', wasSkip: true });
+    });
+
+    test('the URL-source signal is classified using the same finished tracking as the video source', async () => {
+      build();
+      const v1 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]); // baseline, attaches watch tracking to v1
+      v1.dispatchEvent(new Event('ended'));
+
+      gesture();
+      setUrl('/@a/video/2'); // the URL updates before the video-dominance observer catches up
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      expect(changes).toEqual([{ source: 'url', id: '2', wasSkip: false }]);
     });
   });
 });

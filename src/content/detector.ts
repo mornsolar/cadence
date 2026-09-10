@@ -8,8 +8,15 @@
  * (TikTok and YouTube Shorts do this instead of auto-advancing) looks identical to
  * a real skip: some players swap in a fresh <video> element to loop it, which reads
  * as a "dominant video changed" event with nothing else to distinguish it.
+ *
+ * Every change also carries `wasSkip`: whether the video being left had already
+ * played through at least once. These platforms require a swipe to move on even
+ * after a clip finishes, so "swiped away" alone doesn't mean "skipped" — only
+ * leaving before the clip ends does. The dominant video is watched for its `ended`
+ * event (and, as a fallback for players that loop via the native `loop` attribute
+ * and never fire it, for its playback position nearing the end) for exactly this.
  */
-import { DEDUPE_WINDOW_MS, GESTURE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../shared/constants';
+import { DEDUPE_WINDOW_MS, FINISH_NEAR_END_S, GESTURE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../shared/constants';
 import type { PlatformAdapter } from './platforms/types';
 
 export type CardChangeSource = 'url' | 'video';
@@ -17,6 +24,8 @@ export type CardChangeSource = 'url' | 'video';
 export interface CardChange {
   readonly source: CardChangeSource;
   readonly id: string;
+  /** False if the video being left had already played through once; not a skip. */
+  readonly wasSkip: boolean;
 }
 
 export interface DetectorDeps {
@@ -52,6 +61,11 @@ export function createDetector(deps: DetectorDeps): Detector {
   const videoIds = new WeakMap<Element, string>();
   let nextVideoId = 0;
 
+  // Tracks whether the currently-dominant video has played through at least once,
+  // so the next transition away from it can be classified as a skip or not.
+  let watchedVideo: HTMLVideoElement | null = null;
+  let currentVideoFinished = false;
+
   function currentUrl(): URL {
     return new URL(window.location.href);
   }
@@ -72,7 +86,34 @@ export function createDetector(deps: DetectorDeps): Detector {
     if (NAV_KEYS.has(event.key)) markGesture();
   }
 
-  function emit(source: CardChangeSource, id: string): void {
+  function onVideoEnded(): void {
+    currentVideoFinished = true;
+  }
+
+  function onVideoTimeUpdate(): void {
+    const video = watchedVideo;
+    if (video === null) return;
+    const { currentTime, duration } = video;
+    if (Number.isFinite(duration) && duration > 0 && currentTime >= duration - FINISH_NEAR_END_S) {
+      currentVideoFinished = true;
+    }
+  }
+
+  function attachWatchTracking(element: Element): void {
+    if (!(element instanceof window.HTMLVideoElement)) return;
+    watchedVideo = element;
+    element.addEventListener('ended', onVideoEnded);
+    element.addEventListener('timeupdate', onVideoTimeUpdate);
+  }
+
+  function detachWatchTracking(): void {
+    if (watchedVideo === null) return;
+    watchedVideo.removeEventListener('ended', onVideoEnded);
+    watchedVideo.removeEventListener('timeupdate', onVideoTimeUpdate);
+    watchedVideo = null;
+  }
+
+  function emit(source: CardChangeSource, id: string, wasFinished: boolean): void {
     if (!adapter.isSurface(currentUrl())) return;
     const at = now();
     if (at - lastGestureAt > GESTURE_WINDOW_MS) return;
@@ -83,7 +124,7 @@ export function createDetector(deps: DetectorDeps): Detector {
     // inside the gesture window) still needs its own gesture to count, rather
     // than riding on the swipe that brought the viewer to it.
     lastGestureAt = -Infinity;
-    onCardChange({ source, id });
+    onCardChange({ source, id, wasSkip: !wasFinished });
   }
 
   function checkUrl(): void {
@@ -91,7 +132,7 @@ export function createDetector(deps: DetectorDeps): Detector {
     if (id === null || id === lastUrlId) return;
     const hadBaseline = lastUrlId !== null;
     lastUrlId = id;
-    if (hadBaseline) emit('url', id);
+    if (hadBaseline) emit('url', id, currentVideoFinished);
   }
 
   function videoId(element: Element): string {
@@ -114,8 +155,12 @@ export function createDetector(deps: DetectorDeps): Detector {
     });
     if (best === null || best === lastDominant) return;
     const hadBaseline = lastDominant !== null;
+    const leavingFinished = currentVideoFinished;
+    detachWatchTracking();
     lastDominant = best;
-    if (hadBaseline) emit('video', videoId(best));
+    attachWatchTracking(best);
+    currentVideoFinished = false;
+    if (hadBaseline) emit('video', videoId(best), leavingFinished);
   }
 
   function observeVideo(element: Element): void {
@@ -183,6 +228,7 @@ export function createDetector(deps: DetectorDeps): Detector {
     window.removeEventListener('touchmove', onTouchProgress);
     window.removeEventListener('touchend', onTouchProgress);
     window.removeEventListener('keydown', onKeydown);
+    detachWatchTracking();
     intersection?.disconnect();
     mutation?.disconnect();
     intersection = null;

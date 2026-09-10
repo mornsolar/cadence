@@ -22,6 +22,17 @@ async function swipe(times: number): Promise<void> {
   }
 }
 
+type FixtureWindow = Window & { __cadenceFixture: { finishCurrentVideo(): void; loopCurrentVideo(): void } };
+
+/** Watches the current card through to the end, then swipes onward — not a skip. */
+async function watchToEndAndSwipe(times: number): Promise<void> {
+  for (let i = 0; i < times; i += 1) {
+    await harness.page.evaluate(() => (window as unknown as FixtureWindow).__cadenceFixture.finishCurrentVideo());
+    await harness.page.mouse.wheel(0, 600);
+    await harness.page.waitForTimeout(60);
+  }
+}
+
 async function open(url: string): Promise<void> {
   await harness.page.goto(url);
   await harness.page.waitForTimeout(300);
@@ -75,6 +86,33 @@ test('a clip looping in place is never counted as a swipe, even soon after a rea
   await swipe(5);
   expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(10);
   await expect(harness.page.locator(OVERLAY)).toBeVisible();
+});
+
+test('watching a video through and swiping onward does not count against the limit', async () => {
+  await open('https://www.tiktok.com/foryou');
+  await swipe(9);
+  expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(9);
+  await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
+
+  // Twenty videos, each watched to the end before swiping onward — the platform's
+  // required way to move on, not a skip.
+  await watchToEndAndSwipe(20);
+  expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(9);
+  await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
+
+  await swipe(1); // the tenth real skip
+  await expect(harness.page.locator(OVERLAY)).toBeVisible();
+  const events = (await harness.getStorage<Array<{ type: string; swipeCount?: number }>>('events')) ?? [];
+  expect(events.map((e) => e.type)).toEqual(['session_start', 'trigger']);
+  expect(events[1]?.swipeCount).toBe(10);
+});
+
+test('the example from the request: 8 real skips among 30 total videos never show the checkpoint', async () => {
+  await open('https://www.tiktok.com/foryou');
+  await swipe(8);
+  await watchToEndAndSwipe(22);
+  expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(8);
+  await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
 });
 
 test("mode B: I'm done lands on the quiet stopped page with the swipe count", async () => {

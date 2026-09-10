@@ -183,10 +183,9 @@ export function createController(deps: ControllerDeps): Controller {
   }
 
   async function onCardChange(change: CardChange): Promise<void> {
-    void change;
     return enqueue(async () => {
       if (settings === null || !settings.platforms[adapter.id] || overlay.isVisible()) return;
-      await dispatch({ type: 'swipe', platform: adapter.id }, adapter.id);
+      await dispatch({ type: 'swipe', platform: adapter.id, wasSkip: change.wasSkip }, adapter.id);
     });
   }
 

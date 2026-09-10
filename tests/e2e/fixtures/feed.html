@@ -68,6 +68,13 @@
         next.playsInline = true;
         old.replaceWith(next);
       },
+      // Marks the current card's video as having played through, the way a real
+      // clip would just before it loops. A swipe right after this should not be
+      // counted as a skip — only swiping away before this point should be.
+      finishCurrentVideo() {
+        const card = document.querySelector(`.card[data-index="${index}"]`);
+        card?.querySelector('video')?.dispatchEvent(new Event('ended'));
+      },
     };
   </script>
 </body>

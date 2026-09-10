@@ -28,6 +28,15 @@ export const DEDUPE_WINDOW_MS = 400;
  */
 export const GESTURE_WINDOW_MS = 1500;
 
+/**
+ * How close to the end (in seconds) a video's playback has to get before it counts as
+ * "finished watching," as a fallback for players that loop via the native `loop`
+ * attribute rather than firing an `ended` event. A swipe away from a finished video is
+ * the platform's required way to move on, not a skip, and does not count toward the
+ * threshold — only leaving a video before it reaches this point does.
+ */
+export const FINISH_NEAR_END_S = 0.35;
+
 /** URL polling interval for platforms that update history without events. */
 export const URL_POLL_INTERVAL_MS = 250;
 

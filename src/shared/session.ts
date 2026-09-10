@@ -6,7 +6,7 @@ import { MS_PER_MINUTE } from './constants';
 import type { PlatformId, SessionEndReason, SessionState, Settings, Mode } from './types';
 
 export type SessionAction =
-  | { readonly type: 'swipe'; readonly platform: PlatformId }
+  | { readonly type: 'swipe'; readonly platform: PlatformId; readonly wasSkip: boolean }
   | { readonly type: 'continue' }
   | { readonly type: 'stop' }
   | { readonly type: 'cooldownEnded' }
@@ -91,10 +91,17 @@ function startSession(platform: PlatformId, ctx: SessionContext): { state: Sessi
   };
 }
 
-function countSwipe(state: SessionState, platform: PlatformId, ctx: SessionContext): SessionResult {
-  const swipeCount = state.swipeCount + 1;
-  const sinceCheckpoint = state.swipesSinceCheckpoint + 1;
-  const reached = sinceCheckpoint >= ctx.settings.swipeThreshold;
+/**
+ * Refreshes the session on any real transition, but only advances the skip count
+ * (and the checkpoint threshold it drives) when the video being left was actually
+ * abandoned before finishing. Swiping onward after watching a clip to the end is
+ * how these platforms work, not a skip, so it keeps the session alive without
+ * counting against the limit.
+ */
+function countSwipe(state: SessionState, platform: PlatformId, wasSkip: boolean, ctx: SessionContext): SessionResult {
+  const swipeCount = wasSkip ? state.swipeCount + 1 : state.swipeCount;
+  const sinceCheckpoint = wasSkip ? state.swipesSinceCheckpoint + 1 : state.swipesSinceCheckpoint;
+  const reached = wasSkip && sinceCheckpoint >= ctx.settings.swipeThreshold;
   const lockedUntil =
     reached && ctx.settings.mode === 'A' ? iso(ctx.now + ctx.settings.cooldownMinutes * MS_PER_MINUTE) : state.lockedUntil;
 
@@ -112,7 +119,7 @@ function countSwipe(state: SessionState, platform: PlatformId, ctx: SessionConte
   return { state: next, effects };
 }
 
-function handleSwipe(state: SessionState | null, platform: PlatformId, ctx: SessionContext): SessionResult {
+function handleSwipe(state: SessionState | null, platform: PlatformId, wasSkip: boolean, ctx: SessionContext): SessionResult {
   if (state !== null && isLocked(state, ctx.now)) {
     return NO_CHANGE(state);
   }
@@ -122,17 +129,17 @@ function handleSwipe(state: SessionState | null, platform: PlatformId, ctx: Sess
 
   if (live === null) {
     const started = startSession(platform, ctx);
-    const counted = countSwipe(started.state, platform, ctx);
+    const counted = countSwipe(started.state, platform, wasSkip, ctx);
     return { state: counted.state, effects: [...priorEffects, started.effect, ...counted.effects] };
   }
-  const counted = countSwipe(live, platform, ctx);
+  const counted = countSwipe(live, platform, wasSkip, ctx);
   return { state: counted.state, effects: [...priorEffects, ...counted.effects] };
 }
 
 export function reduceSession(state: SessionState | null, action: SessionAction, ctx: SessionContext): SessionResult {
   switch (action.type) {
     case 'swipe':
-      return handleSwipe(state, action.platform, ctx);
+      return handleSwipe(state, action.platform, action.wasSkip, ctx);
     case 'continue':
       return state === null ? NO_CHANGE(null) : { state: { ...state, lastSwipeAt: iso(ctx.now) }, effects: [] };
     case 'stop':
