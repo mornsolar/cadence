@@ -3,6 +3,7 @@ import { pickAdapter } from '../../src/content/platforms';
 import { tiktok } from '../../src/content/platforms/tiktok';
 import { instagram } from '../../src/content/platforms/instagram';
 import { youtube } from '../../src/content/platforms/youtube';
+import { facebook } from '../../src/content/platforms/facebook';
 
 const url = (s: string) => new URL(s);
 
@@ -56,11 +57,30 @@ describe('youtube adapter', () => {
   });
 });
 
+describe('facebook adapter', () => {
+  test.each([
+    ['https://www.facebook.com/reel/1234567890123456', true, '1234567890123456'],
+    ['https://www.facebook.com/reel/1234567890123456/', true, '1234567890123456'],
+    ['https://www.facebook.com/reel/1234567890123456?ref=share', true, '1234567890123456'],
+    ['https://www.facebook.com/reel/', true, null],
+    ['https://www.facebook.com/reels/', true, null],
+    ['https://www.facebook.com/reels', true, null],
+    ['https://www.facebook.com/', false, null],
+    ['https://www.facebook.com/watch/', false, null],
+    ['https://www.facebook.com/someone/', false, null],
+    ['https://www.facebook.com/someone/videos/1234567890123456/', false, null],
+  ])('%s -> surface %s, id %s', (href, surface, id) => {
+    expect(facebook.isSurface(url(href))).toBe(surface);
+    expect(facebook.contentIdFromUrl(url(href))).toBe(id);
+  });
+});
+
 describe('pickAdapter', () => {
   test('matches by hostname', () => {
     expect(pickAdapter(url('https://www.tiktok.com/foryou'))?.id).toBe('tiktok');
     expect(pickAdapter(url('https://www.instagram.com/reels/'))?.id).toBe('instagram');
     expect(pickAdapter(url('https://www.youtube.com/shorts/x'))?.id).toBe('youtube');
+    expect(pickAdapter(url('https://www.facebook.com/reel/1234567890123456'))?.id).toBe('facebook');
   });
   test('returns null for other hosts', () => {
     expect(pickAdapter(url('https://example.com/shorts/x'))).toBeNull();

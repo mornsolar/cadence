@@ -1,6 +1,6 @@
 export type Mode = 'A' | 'B' | 'C';
 
-export type PlatformId = 'tiktok' | 'instagram' | 'youtube';
+export type PlatformId = 'tiktok' | 'instagram' | 'youtube' | 'facebook';
 
 export interface Settings {
   readonly mode: Mode;

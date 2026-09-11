@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { launch, type Harness } from './extension';
 
 const OVERLAY = '#cadence-host .backdrop';
-const DEFAULTS = { mode: 'B', swipeThreshold: 10, idleGapMinutes: 5, cooldownMinutes: 5, platforms: { tiktok: true, instagram: true, youtube: true } };
+const DEFAULTS = { mode: 'B', swipeThreshold: 10, idleGapMinutes: 5, cooldownMinutes: 5, platforms: { tiktok: true, instagram: true, youtube: true, facebook: true } };
 
 let harness: Harness;
 
@@ -156,7 +156,7 @@ test('a profile page is not a feed: scrolling there never counts', async () => {
   expect(await harness.getStorage('session')).toBeNull();
 });
 
-test('instagram reels and youtube shorts trigger through the same path', async () => {
+test('instagram reels, youtube shorts and facebook reels all trigger through the same path', async () => {
   await open('https://www.instagram.com/reels/');
   await swipe(10);
   await expect(harness.page.locator(OVERLAY)).toBeVisible();
@@ -165,9 +165,14 @@ test('instagram reels and youtube shorts trigger through the same path', async (
   await open('https://www.youtube.com/shorts/fix0000000');
   await swipe(10);
   await expect(harness.page.locator(OVERLAY)).toBeVisible();
+  await harness.page.locator(OVERLAY).getByRole('button', { name: 'Keep going' }).click();
+
+  await open('https://www.facebook.com/reel/9000000000000000');
+  await swipe(10);
+  await expect(harness.page.locator(OVERLAY)).toBeVisible();
 
   const session = await harness.getStorage<{ swipeCount: number }>('session');
-  expect(session?.swipeCount).toBe(20);
+  expect(session?.swipeCount).toBe(30);
 });
 
 test('the options page saves a mode change and records it', async () => {

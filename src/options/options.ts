@@ -11,6 +11,7 @@ const PLATFORMS: ReadonlyArray<{ id: PlatformId; name: string }> = [
   { id: 'tiktok', name: 'TikTok' },
   { id: 'instagram', name: 'Instagram Reels' },
   { id: 'youtube', name: 'YouTube Shorts' },
+  { id: 'facebook', name: 'Facebook Reels' },
 ];
 const DIARY_ENTRIES_SHOWN = 12;
 const NUMERIC_KEYS = ['swipeThreshold', 'idleGapMinutes', 'cooldownMinutes'] as const;

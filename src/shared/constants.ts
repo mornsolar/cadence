@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: Settings = {
   swipeThreshold: 10,
   idleGapMinutes: 5,
   cooldownMinutes: 5,
-  platforms: { tiktok: true, instagram: true, youtube: true },
+  platforms: { tiktok: true, instagram: true, youtube: true, facebook: true },
 };
 
 export const SETTINGS_LIMITS = {

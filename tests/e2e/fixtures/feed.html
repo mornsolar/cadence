@@ -21,6 +21,7 @@
     const permalink = (i) => {
       if (host.includes('tiktok')) return `/@fixture/video/7000000000${String(i).padStart(9, '0')}`;
       if (host.includes('instagram')) return `/reels/FIX${String(i).padStart(4, '0')}/`;
+      if (host.includes('facebook')) return `/reel/${9000000000000000 + i}`;
       return `/shorts/fix${String(i).padStart(7, '0')}`;
     };
     const isProfile = /^\/@[^/]+\/?$/.test(path) && host.includes('tiktok');

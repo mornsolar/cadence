@@ -184,7 +184,7 @@ describe('controller', () => {
   });
 
   test('a disabled platform is ignored entirely', async () => {
-    await boot({ platforms: { tiktok: false, instagram: true, youtube: true } });
+    await boot({ platforms: { tiktok: false, instagram: true, youtube: true, facebook: true } });
     await swipe(12);
     expect((await storage.get(['session'])).session).toBeUndefined();
     expect(await events()).toEqual([]);

@@ -12,7 +12,8 @@
   "host_permissions": [
     "https://www.tiktok.com/*",
     "https://www.instagram.com/*",
-    "https://www.youtube.com/*"
+    "https://www.youtube.com/*",
+    "https://www.facebook.com/*"
   ],
   "action": {
     "default_title": "Cadence"
@@ -26,7 +27,8 @@
       "matches": [
         "https://www.tiktok.com/*",
         "https://www.instagram.com/*",
-        "https://www.youtube.com/*"
+        "https://www.youtube.com/*",
+        "https://www.facebook.com/*"
       ],
       "js": ["content/index.js"],
       "run_at": "document_idle",
@@ -39,7 +41,8 @@
       "matches": [
         "https://www.tiktok.com/*",
         "https://www.instagram.com/*",
-        "https://www.youtube.com/*"
+        "https://www.youtube.com/*",
+        "https://www.facebook.com/*"
       ]
     }
   ]

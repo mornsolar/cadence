@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS, SETTINGS_LIMITS } from './constants';
 import type { Mode, PlatformId, Settings } from './types';
 
 const MODES: readonly Mode[] = ['A', 'B', 'C'];
-const PLATFORM_IDS: readonly PlatformId[] = ['tiktok', 'instagram', 'youtube'];
+const PLATFORM_IDS: readonly PlatformId[] = ['tiktok', 'instagram', 'youtube', 'facebook'];
 
 export interface ParsedSettings {
   readonly settings: Settings;

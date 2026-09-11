@@ -8,14 +8,14 @@ describe('parseSettings', () => {
   });
 
   test('accepts a fully valid object unchanged', () => {
-    const valid = { mode: 'A', swipeThreshold: 25, idleGapMinutes: 3, cooldownMinutes: 10, platforms: { tiktok: false, instagram: true, youtube: true } };
+    const valid = { mode: 'A', swipeThreshold: 25, idleGapMinutes: 3, cooldownMinutes: 10, platforms: { tiktok: false, instagram: true, youtube: true, facebook: false } };
     expect(parseSettings(valid)).toEqual({ settings: valid, problems: [] });
   });
 
   test('falls back per field and names each problem', () => {
     const raw = { mode: 'Z', swipeThreshold: 0, idleGapMinutes: 'soon', cooldownMinutes: 99999, platforms: { tiktok: 'yes' } };
     const { settings, problems } = parseSettings(raw);
-    expect(settings).toEqual({ ...DEFAULT_SETTINGS, platforms: { tiktok: true, instagram: true, youtube: true } });
+    expect(settings).toEqual({ ...DEFAULT_SETTINGS, platforms: { tiktok: true, instagram: true, youtube: true, facebook: true } });
     expect(problems).toEqual([
       'mode: expected A, B or C, got "Z"',
       'swipeThreshold: expected an integer from 1 to 500, got 0',

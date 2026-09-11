@@ -5,7 +5,12 @@ import path from 'node:path';
 
 const EXTENSION_DIR = path.resolve(import.meta.dirname, '../../dist/chrome');
 const FIXTURE = path.resolve(import.meta.dirname, 'fixtures/feed.html');
-const HOSTS = ['https://www.tiktok.com/**', 'https://www.instagram.com/**', 'https://www.youtube.com/**'];
+const HOSTS = [
+  'https://www.tiktok.com/**',
+  'https://www.instagram.com/**',
+  'https://www.youtube.com/**',
+  'https://www.facebook.com/**',
+];
 
 export interface Harness {
   readonly context: BrowserContext;

@@ -1,6 +1,6 @@
 # Cadence
 
-An agency-returning swipe checkpoint for short-form video on desktop web. A browser extension for Chrome and Firefox that watches TikTok, Instagram Reels and YouTube Shorts, and after a set number of completed swipes pauses the feed and asks one question: *Is this what you meant to be doing?*
+An agency-returning swipe checkpoint for short-form video on desktop web. A browser extension for Chrome and Firefox that watches TikTok, Instagram Reels, YouTube Shorts and Facebook Reels, and after a set number of completed swipes pauses the feed and asks one question: *Is this what you meant to be doing?*
 
 It is a research instrument first and a feature second. Everything it records stays on the device.
 
@@ -30,8 +30,8 @@ If Mode B ever starts to feel like failing, it has silently become Mode A. Treat
 
 | Term | Rule | Setting |
 |---|---|---|
-| Completed swipe (a skip) | The active content card changes, that change follows a scroll, swipe or arrow-key gesture within 1.5 seconds, *and* the video being left had not already played through. Identity is the content id in the URL, with the video that dominates the viewport as a fallback. A change from either source inside a 400 ms window counts once. Going back counts. Like, comment and share taps and cancelled drags do not change the card, so they do not count. Neither does a clip finishing and looping back to itself — TikTok and YouTube Shorts do that instead of auto-advancing, sometimes by swapping in a fresh video element, which would otherwise look identical to a real skip. Crucially, since these platforms require a swipe to move on even after a video finishes, swiping onward *after* watching one through is not a skip either — only leaving before it ends is. That transition still keeps the session alive; it just does not count toward the threshold. | fixed |
-| Recognised surface | TikTok: `/`, `/foryou`, `/following`, `/explore`, `/@user/video/ID`. Instagram: `/reels/*`, `/reel/*`. YouTube: `/shorts/*`. Profile pages, search, ordinary YouTube watch pages and everything else are ignored. | per-platform on/off |
+| Completed swipe (a skip) | The active content card changes, that change follows a scroll, swipe or arrow-key gesture within 1.5 seconds, *and* the video being left had not already played through. Identity is the content id in the URL, with the video that dominates the viewport as a fallback. A change from either source inside a 400 ms window counts once. Going back counts. Like, comment and share taps and cancelled drags do not change the card, so they do not count. Neither does a clip finishing and looping back to itself — none of these platforms auto-advance, and some do the loop by swapping in a fresh video element, which would otherwise look identical to a real skip. Crucially, since these platforms require a swipe to move on even after a video finishes, swiping onward *after* watching one through is not a skip either — only leaving before it ends is. That transition still keeps the session alive; it just does not count toward the threshold. | fixed |
+| Recognised surface | TikTok: `/`, `/foryou`, `/following`, `/explore`, `/@user/video/ID`. Instagram: `/reels/*`, `/reel/*`. YouTube: `/shorts/*`. Facebook: `/reel/*` (see the limits below — its feed-root path is a best guess, not independently confirmed). Profile pages, search, ordinary YouTube watch pages and everything else are ignored. | per-platform on/off |
 | Session | Starts at the first counted swipe. Ends after the idle gap passes with no swipe (default 5 minutes), when the person chooses I'm done, or when a hard-pause cooldown ends. Closing a tab does not end it; the next load reconciles it using the last swipe time. One session is shared across all three platforms and all tabs. | idle gap in minutes |
 | Trigger | Fires when the count since the last checkpoint reaches the threshold (default 10). Keep going restarts the count inside the same session. | swipes before the checkpoint |
 | Cooldown | Mode A only. Default 5 minutes. The session ends when it lifts. | minutes paused |
@@ -92,6 +92,7 @@ Layout: `src/shared` holds the pure core (session reducer, settings validation, 
 - The idle rule is a proxy for "put it down". Five minutes is a starting value, not a finding.
 - The weekly check-in is a browser notification. If notifications are blocked, the check-in is still on the settings page.
 - "Finished watching" relies on the video element's `ended` event, with playback position nearing the reported duration as a fallback for players that loop via the native `loop` attribute. A player that never fires either signal (for example, one that reports an infinite or missing duration) would misclassify a full watch as a skip.
+- Facebook's reel permalink format (`facebook.com/reel/<id>`) is confirmed from public sources, but the path its own Reels tab routes to when browsing without a specific permalink is not independently verified here. If it turns out to differ from what the adapter expects, the extension simply stays inactive on Facebook rather than miscounting — worth checking against the live site before relying on it there.
 
 ## Non-goals
 
