@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: Settings = {
   idleGapMinutes: 5,
   cooldownMinutes: 5,
   platforms: { tiktok: true, instagram: true, youtube: true, facebook: true },
+  showCounter: true,
 };
 
 export const SETTINGS_LIMITS = {

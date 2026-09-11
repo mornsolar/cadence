@@ -32,6 +32,12 @@ function mode(value: unknown, problems: string[]): Mode {
   return DEFAULT_SETTINGS.mode;
 }
 
+function booleanSetting(name: 'showCounter', value: unknown, problems: string[]): boolean {
+  if (typeof value === 'boolean') return value;
+  problems.push(`${name}: expected a boolean, got ${show(value)}`);
+  return DEFAULT_SETTINGS[name];
+}
+
 function platforms(value: unknown, problems: string[]): Record<PlatformId, boolean> {
   const source = isRecord(value) ? value : {};
   const entries = PLATFORM_IDS.map((id) => {
@@ -55,6 +61,7 @@ export function parseSettings(raw: unknown): ParsedSettings {
     idleGapMinutes: boundedInteger('idleGapMinutes', raw.idleGapMinutes, problems),
     cooldownMinutes: boundedInteger('cooldownMinutes', raw.cooldownMinutes, problems),
     platforms: platforms(raw.platforms, problems),
+    showCounter: booleanSetting('showCounter', raw.showCounter, problems),
   };
   return { settings, problems };
 }
@@ -66,7 +73,7 @@ export interface SettingsChange {
 }
 
 export function settingsDiff(before: Settings, after: Settings): readonly SettingsChange[] {
-  const scalarKeys = ['mode', 'swipeThreshold', 'idleGapMinutes', 'cooldownMinutes'] as const;
+  const scalarKeys = ['mode', 'swipeThreshold', 'idleGapMinutes', 'cooldownMinutes', 'showCounter'] as const;
   const scalar = scalarKeys
     .filter((key) => before[key] !== after[key])
     .map((key) => ({ key, from: String(before[key]), to: String(after[key]) }));

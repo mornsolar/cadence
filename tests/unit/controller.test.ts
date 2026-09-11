@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createController, type Controller } from '../../src/content/controller';
 import type { Detector, DetectorDeps } from '../../src/content/detector';
+import type { CounterBadge } from '../../src/content/overlay/counter';
 import type { OverlayHost } from '../../src/content/overlay/host';
 import { tiktok } from '../../src/content/platforms/tiktok';
 import { DEFAULT_SETTINGS } from '../../src/shared/constants';
@@ -22,10 +23,19 @@ class FakeOverlay implements OverlayHost {
   }
 }
 
+class FakeCounter implements CounterBadge {
+  visible = false;
+  count: number | null = null;
+  threshold: number | null = null;
+  show(count: number, threshold: number) { this.visible = true; this.count = count; this.threshold = threshold; }
+  hide() { this.visible = false; this.count = null; this.threshold = null; }
+}
+
 describe('controller', () => {
   let clock: number;
   let storage: InMemoryStorage;
   let overlay: FakeOverlay;
+  let counter: FakeCounter;
   let sendMessage: ReturnType<typeof vi.fn>;
   let detectorDeps: DetectorDeps | null;
   let controller: Controller;
@@ -35,6 +45,7 @@ describe('controller', () => {
     vi.useFakeTimers();
     clock = T0;
     overlay = new FakeOverlay();
+    counter = new FakeCounter();
     sendMessage = vi.fn().mockResolvedValue(undefined);
     detectorDeps = null;
     detector = { start: vi.fn(), stop: vi.fn() };
@@ -52,6 +63,7 @@ describe('controller', () => {
       adapter: tiktok,
       storage,
       overlay,
+      counter,
       document,
       window,
       sendMessage,
@@ -183,6 +195,36 @@ describe('controller', () => {
     expect(await events()).toEqual([{ type: 'session_start', at: expect.any(String), sessionId: 's1', platform: 'tiktok' }]);
   });
 
+  test('the counter badge shows the current count, hides during the checkpoint, and clears at threshold', async () => {
+    await boot();
+    expect(counter.visible).toBe(false); // no session yet
+
+    await swipe(1);
+    expect(counter).toMatchObject({ visible: true, count: 1, threshold: 10 });
+
+    await swipe(8);
+    expect(counter).toMatchObject({ visible: true, count: 9, threshold: 10 });
+
+    await swipe(1); // the tenth swipe triggers the checkpoint
+    expect(counter.visible).toBe(false); // hidden while the checkpoint covers the screen
+
+    overlay.button('continue').click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(counter).toMatchObject({ visible: true, count: 0, threshold: 10 }); // fresh count after Keep going
+  });
+
+  test('the counter badge is off entirely in mode C', async () => {
+    await boot({ mode: 'C' });
+    await swipe(5);
+    expect(counter.visible).toBe(false);
+  });
+
+  test('the counter badge respects the showCounter setting', async () => {
+    await boot({ showCounter: false });
+    await swipe(5);
+    expect(counter.visible).toBe(false);
+  });
+
   test('a disabled platform is ignored entirely', async () => {
     await boot({ platforms: { tiktok: false, instagram: true, youtube: true, facebook: true } });
     await swipe(12);
@@ -229,7 +271,7 @@ describe('controller', () => {
 
   test('invalid stored settings fall back to defaults', async () => {
     storage = new InMemoryStorage({ settings: { mode: 'nope' } as unknown as Settings });
-    controller = createController({ adapter: tiktok, storage, overlay, document, window, sendMessage, now: () => clock, warn: () => undefined, detectorFactory: () => detector });
+    controller = createController({ adapter: tiktok, storage, overlay, counter, document, window, sendMessage, now: () => clock, warn: () => undefined, detectorFactory: () => detector });
     await controller.start();
     await swipe(10);
     expect(overlay.isVisible()).toBe(true);

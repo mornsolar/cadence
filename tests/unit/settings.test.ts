@@ -8,12 +8,12 @@ describe('parseSettings', () => {
   });
 
   test('accepts a fully valid object unchanged', () => {
-    const valid = { mode: 'A', swipeThreshold: 25, idleGapMinutes: 3, cooldownMinutes: 10, platforms: { tiktok: false, instagram: true, youtube: true, facebook: false } };
+    const valid = { mode: 'A', swipeThreshold: 25, idleGapMinutes: 3, cooldownMinutes: 10, platforms: { tiktok: false, instagram: true, youtube: true, facebook: false }, showCounter: false };
     expect(parseSettings(valid)).toEqual({ settings: valid, problems: [] });
   });
 
   test('falls back per field and names each problem', () => {
-    const raw = { mode: 'Z', swipeThreshold: 0, idleGapMinutes: 'soon', cooldownMinutes: 99999, platforms: { tiktok: 'yes' } };
+    const raw = { mode: 'Z', swipeThreshold: 0, idleGapMinutes: 'soon', cooldownMinutes: 99999, platforms: { tiktok: 'yes' }, showCounter: 'yep' };
     const { settings, problems } = parseSettings(raw);
     expect(settings).toEqual({ ...DEFAULT_SETTINGS, platforms: { tiktok: true, instagram: true, youtube: true, facebook: true } });
     expect(problems).toEqual([
@@ -22,6 +22,7 @@ describe('parseSettings', () => {
       'idleGapMinutes: expected an integer from 1 to 1440, got "soon"',
       'cooldownMinutes: expected an integer from 1 to 1440, got 99999',
       'platforms.tiktok: expected a boolean, got "yes"',
+      'showCounter: expected a boolean, got "yep"',
     ]);
   });
 

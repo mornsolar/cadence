@@ -12,6 +12,7 @@ import type { StoragePatch, StorageRepository } from '../shared/storage';
 import type { LogEvent, PlatformId, SessionState, Settings } from '../shared/types';
 import { createDetector, type CardChange, type Detector, type DetectorDeps } from './detector';
 import { renderCheckpoint } from './overlay/checkpoint';
+import type { CounterBadge } from './overlay/counter';
 import type { OverlayHost } from './overlay/host';
 import { renderLockout, type LockoutView } from './overlay/lockout';
 import type { PlatformAdapter } from './platforms/types';
@@ -20,6 +21,7 @@ export interface ControllerDeps {
   readonly adapter: PlatformAdapter;
   readonly storage: StorageRepository;
   readonly overlay: OverlayHost;
+  readonly counter: CounterBadge;
   readonly document: Document;
   readonly window: Window & typeof globalThis;
   readonly sendMessage: (message: BackgroundMessage) => Promise<unknown>;
@@ -38,7 +40,7 @@ export interface Controller {
 const IDLE_TIMER_SLACK_MS = 1000;
 
 export function createController(deps: ControllerDeps): Controller {
-  const { adapter, storage, overlay, document, window } = deps;
+  const { adapter, storage, overlay, counter, document, window } = deps;
   const now = deps.now ?? (() => Date.now());
   const newId = deps.newId ?? (() => newSessionId(now()));
   const warn = deps.warn ?? ((message, ...detail) => console.warn(`Cadence: ${message}`, ...detail));
@@ -76,6 +78,7 @@ export function createController(deps: ControllerDeps): Controller {
       await runEffect(effect, platform);
     }
     scheduleIdleCheck();
+    updateCounterBadge();
   }
 
   async function runEffect(effect: SessionEffect, platform: PlatformId): Promise<void> {
@@ -121,6 +124,7 @@ export function createController(deps: ControllerDeps): Controller {
     });
     overlay.show(lockout.element);
     lockout.start();
+    updateCounterBadge();
   }
 
   function showCheckpoint(platform: PlatformId): void {
@@ -146,12 +150,35 @@ export function createController(deps: ControllerDeps): Controller {
       },
     });
     overlay.show(view);
+    updateCounterBadge();
   }
 
   function hideOverlay(): void {
     lockout?.stop();
     lockout = null;
     overlay.hide();
+    updateCounterBadge();
+  }
+
+  /**
+   * Keeps the "N / threshold" badge in sync with the session. Hidden entirely in
+   * mode C (a true no-intervention baseline shouldn't show anything), while a
+   * platform is switched off, when there's no active session yet, and while the
+   * checkpoint or lockout is covering the screen.
+   */
+  function updateCounterBadge(): void {
+    if (
+      settings === null ||
+      !settings.showCounter ||
+      settings.mode === 'C' ||
+      !settings.platforms[adapter.id] ||
+      session === null ||
+      overlay.isVisible()
+    ) {
+      counter.hide();
+      return;
+    }
+    counter.show(session.swipesSinceCheckpoint, settings.swipeThreshold);
   }
 
   function scheduleIdleCheck(): void {
@@ -180,6 +207,7 @@ export function createController(deps: ControllerDeps): Controller {
         });
       }
     }
+    updateCounterBadge();
   }
 
   async function onCardChange(change: CardChange): Promise<void> {
@@ -200,6 +228,7 @@ export function createController(deps: ControllerDeps): Controller {
     await enqueue(() => dispatch({ type: 'reconcile' }, adapter.id));
     if (session !== null && session.lockedUntil !== null && settings.mode === 'A') showLockout(adapter.id);
     scheduleIdleCheck();
+    updateCounterBadge();
 
     detector = detectorFactory({ adapter, window, document, onCardChange: (change) => void onCardChange(change), now });
     detector.start();
@@ -211,6 +240,7 @@ export function createController(deps: ControllerDeps): Controller {
     if (idleTimer !== null) window.clearTimeout(idleTimer);
     idleTimer = null;
     hideOverlay();
+    counter.hide();
   }
 
   return { start, stop, onCardChange };

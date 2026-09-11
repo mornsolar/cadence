@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { launch, type Harness } from './extension';
 
 const OVERLAY = '#cadence-host .backdrop';
-const DEFAULTS = { mode: 'B', swipeThreshold: 10, idleGapMinutes: 5, cooldownMinutes: 5, platforms: { tiktok: true, instagram: true, youtube: true, facebook: true } };
+const DEFAULTS = { mode: 'B', swipeThreshold: 10, idleGapMinutes: 5, cooldownMinutes: 5, platforms: { tiktok: true, instagram: true, youtube: true, facebook: true }, showCounter: true };
 
 let harness: Harness;
 
@@ -37,6 +37,22 @@ async function open(url: string): Promise<void> {
   await harness.page.goto(url);
   await harness.page.waitForTimeout(300);
 }
+
+test('the counter badge shows the running count and stays out of the way of the checkpoint', async () => {
+  await open('https://www.tiktok.com/foryou');
+  const badge = harness.page.locator('#cadence-counter').locator('.badge');
+  await expect(badge).toHaveCount(0); // nothing to show before the first swipe
+
+  await swipe(4);
+  await expect(badge).toHaveText('4 / 10');
+
+  await swipe(6); // the tenth swipe opens the checkpoint
+  await expect(harness.page.locator(OVERLAY)).toBeVisible();
+  await expect(badge).toHaveCount(0); // hidden while the checkpoint covers the screen
+
+  await harness.page.locator(OVERLAY).getByRole('button', { name: 'Keep going' }).click();
+  await expect(badge).toHaveText('0 / 10');
+});
 
 test('mode B: the tenth swipe shows the checkpoint, blocks the feed, and Keep going resumes it', async () => {
   await open('https://www.tiktok.com/foryou');

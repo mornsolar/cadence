@@ -41,5 +41,10 @@ export const COPY = {
     summary: (sessions: number, medianSwipes: number, days: number): string =>
       `${sessions} ${sessions === 1 ? 'session' : 'sessions'} in the last ${days} days, about ${medianSwipes} swipes each.`,
     clearConfirm: 'Erase every recorded session and diary entry on this device?',
+    showCounterLabel: 'Show a quiet running count while scrolling',
+  },
+  counter: {
+    /** Deliberately bare — just where things stand, no "left"/"remaining" countdown framing. */
+    label: (count: number, threshold: number): string => `${count} / ${threshold}`,
   },
 } as const;

@@ -55,6 +55,7 @@ function fillForm(settings: Settings): void {
   document.querySelectorAll<HTMLInputElement>('input[name="platform"]').forEach((input) => {
     input.checked = settings.platforms[input.value as PlatformId];
   });
+  el<HTMLInputElement>('showCounter').checked = settings.showCounter;
   el('cooldown-field').hidden = settings.mode !== 'A';
 }
 
@@ -64,7 +65,8 @@ function readForm(): unknown {
   const platforms = Object.fromEntries(
     Array.from(document.querySelectorAll<HTMLInputElement>('input[name="platform"]')).map((input) => [input.value, input.checked]),
   );
-  return { mode, ...numbers, platforms };
+  const showCounter = el<HTMLInputElement>('showCounter').checked;
+  return { mode, ...numbers, platforms, showCounter };
 }
 
 function download(filename: string, text: string, type: string): void {
@@ -133,6 +135,7 @@ async function main(): Promise<void> {
   el('diary-prompt').textContent = COPY.diary.prompt;
   el('diarySave').textContent = COPY.diary.save;
   el('keep-logging-note').textContent = COPY.options.keepLoggingNote;
+  el('show-counter-label').textContent = COPY.options.showCounterLabel;
 
   const stored = await storage.get(['settings']);
   const parsed = parseSettings(stored.settings);

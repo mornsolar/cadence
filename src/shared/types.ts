@@ -8,6 +8,8 @@ export interface Settings {
   readonly idleGapMinutes: number;
   readonly cooldownMinutes: number;
   readonly platforms: Readonly<Record<PlatformId, boolean>>;
+  /** A quiet "N / threshold" badge while scrolling. Off entirely in mode C, which stays a true no-intervention baseline. */
+  readonly showCounter: boolean;
 }
 
 /** A session is a run of swipes with no gap longer than the idle rule. */

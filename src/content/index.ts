@@ -2,6 +2,7 @@ import { getBrowserApi } from '../shared/browser-api';
 import type { BackgroundMessage } from '../shared/messages';
 import { createExtensionStorage } from '../shared/storage';
 import { createController } from './controller';
+import { createCounterBadge } from './overlay/counter';
 import { createOverlayHost } from './overlay/host';
 import { pickAdapter } from './platforms';
 
@@ -22,6 +23,7 @@ function main(): void {
     adapter,
     storage: createExtensionStorage(api),
     overlay: createOverlayHost(document),
+    counter: createCounterBadge(document),
     document,
     window,
     sendMessage: (message: BackgroundMessage) => api.runtime.sendMessage(message),
