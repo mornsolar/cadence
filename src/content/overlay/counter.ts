@@ -19,7 +19,10 @@ const BADGE_CSS = `
 .badge {
   position: fixed;
   right: 1rem;
-  bottom: 1rem;
+  /* Deliberately near the top, not the bottom: cookie-consent and "get the app"
+     banners on these sites almost always dock to the bottom of the screen and
+     would otherwise cover a bottom-corner badge entirely. */
+  top: 4rem;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   background: rgba(30, 29, 27, 0.55);
