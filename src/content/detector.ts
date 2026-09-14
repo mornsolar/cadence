@@ -99,8 +99,14 @@ export function createDetector(deps: DetectorDeps): Detector {
     }
   }
 
+  /** Idempotent if this is already the watched element — some players (YouTube
+   * Shorts included) recycle a single persistent <video> node for the whole feed
+   * rather than mounting a new one per clip, so re-attaching to the same node on
+   * every dominance check must not register duplicate listeners. */
   function attachWatchTracking(element: Element): void {
+    if (watchedVideo === element) return;
     if (!(element instanceof window.HTMLVideoElement)) return;
+    detachWatchTracking();
     watchedVideo = element;
     element.addEventListener('ended', onVideoEnded);
     element.addEventListener('timeupdate', onVideoTimeUpdate);
@@ -124,6 +130,12 @@ export function createDetector(deps: DetectorDeps): Detector {
     // inside the gesture window) still needs its own gesture to count, rather
     // than riding on the swipe that brought the viewer to it.
     lastGestureAt = -Infinity;
+    // Reset here, on acceptance, rather than wherever a dominance change happens to
+    // be detected: some players (YouTube Shorts included) reuse one <video> element
+    // for the whole feed, so the URL is the only signal a new clip started, and the
+    // "watched through" flag for the video just left must clear regardless of which
+    // source (element swap, URL change, or both) is the one that caught this move.
+    currentVideoFinished = false;
     onCardChange({ source, id, wasSkip: !wasFinished });
   }
 
@@ -156,10 +168,8 @@ export function createDetector(deps: DetectorDeps): Detector {
     if (best === null || best === lastDominant) return;
     const hadBaseline = lastDominant !== null;
     const leavingFinished = currentVideoFinished;
-    detachWatchTracking();
     lastDominant = best;
-    attachWatchTracking(best);
-    currentVideoFinished = false;
+    attachWatchTracking(best); // idempotent if this is already the watched element (e.g. a recycled node)
     if (hadBaseline) emit('video', videoId(best), leavingFinished);
   }
 

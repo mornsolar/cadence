@@ -386,5 +386,36 @@ describe('createDetector', () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
       expect(changes).toEqual([{ source: 'url', id: '2', wasSkip: false }]);
     });
+
+    test('a player that reuses one persistent <video> element (YouTube Shorts) still resets "watched" per URL, so a later skip is not stuck', async () => {
+      // The dominant element never changes here — only the URL does — reproducing
+      // how YouTube Shorts' player actually works, unlike TikTok/Instagram which
+      // swap in a distinct element per card.
+      setUrl('/shorts/aaa');
+      build(youtube);
+      const v1 = addVideo();
+      await vi.advanceTimersByTimeAsync(0);
+      gesture();
+      io().fire([{ target: v1, ratio: 1 }]); // baseline dominance on the one persistent element
+
+      gesture();
+      setUrl('/shorts/bbb'); // move to clip 2; clip 1 was never watched through -> a skip
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      expect(changes).toEqual([{ source: 'url', id: 'bbb', wasSkip: true }]);
+
+      v1.dispatchEvent(new Event('ended')); // clip 2, played on the SAME element, watched through
+
+      gesture();
+      setUrl('/shorts/ccc'); // move to clip 3; clip 2 was watched through -> not a skip
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      expect(changes[1]).toEqual({ source: 'url', id: 'ccc', wasSkip: false });
+
+      // The bug this reproduces: without a reset keyed to acceptance, "watched"
+      // from clip 2 would leak forward and this next skip would wrongly stay false.
+      gesture();
+      setUrl('/shorts/ddd'); // clip 3 abandoned quickly, no ended event -> a real skip
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      expect(changes[2]).toEqual({ source: 'url', id: 'ddd', wasSkip: true });
+    });
   });
 });
