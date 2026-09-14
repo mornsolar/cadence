@@ -30,13 +30,26 @@ export const DEDUPE_WINDOW_MS = 400;
 export const GESTURE_WINDOW_MS = 1500;
 
 /**
- * How close to the end (in seconds) a video's playback has to get before it counts as
- * "finished watching," as a fallback for players that loop via the native `loop`
- * attribute rather than firing an `ended` event. A swipe away from a finished video is
- * the platform's required way to move on, not a skip, and does not count toward the
- * threshold — only leaving a video before it reaches this point does.
+ * How close to the end (in seconds) a video's playback has to get before counting as
+ * one completed pass, as a fallback for players that loop via the native `loop`
+ * attribute rather than firing an `ended` event.
  */
 export const FINISH_NEAR_END_S = 0.35;
+
+/**
+ * How many times a clip must play through before leaving it stops counting as a skip.
+ * One pass is too weak a signal on short clips (a few seconds is common): it can
+ * complete on its own well before a person has decided whether to stay or move on,
+ * so a single loop can't be told apart from someone who was about to skip anyway.
+ * Seeing it complete a second time is real evidence of having stayed on purpose.
+ */
+export const FINISH_REQUIRED_COMPLETIONS = 2;
+
+/**
+ * A completion detected via playback position (the `loop`-attribute fallback) within
+ * this long of an `ended` event is the same completion reported twice, not two passes.
+ */
+export const FINISH_DEDUPE_MS = 1000;
 
 /** URL polling interval for platforms that update history without events. */
 export const URL_POLL_INTERVAL_MS = 250;
