@@ -10,23 +10,13 @@
  * as a "dominant video changed" event with nothing else to distinguish it.
  *
  * Every change also carries `wasSkip`: whether the video being left had already
- * played through at least FINISH_REQUIRED_COMPLETIONS times. These platforms require
- * a swipe to move on even after a clip finishes, so "swiped away" alone doesn't mean
- * "skipped" — only leaving before the clip has genuinely been watched does. One pass
- * is too weak a signal on short clips, since it can complete on its own before a
- * person has decided to stay or go, so more than one is required. The dominant video
- * is watched for its `ended` event (and, as a fallback for players that loop via the
- * native `loop` attribute and never fire it, for its playback position nearing the
- * end) to count completions.
+ * played through at least once. These platforms require a swipe to move on even
+ * after a clip finishes, so "swiped away" alone doesn't mean "skipped" — only
+ * leaving before the clip ends does. The dominant video is watched for its `ended`
+ * event (and, as a fallback for players that loop via the native `loop` attribute
+ * and never fire it, for its playback position nearing the end) for exactly this.
  */
-import {
-  DEDUPE_WINDOW_MS,
-  FINISH_DEDUPE_MS,
-  FINISH_NEAR_END_S,
-  FINISH_REQUIRED_COMPLETIONS,
-  GESTURE_WINDOW_MS,
-  URL_POLL_INTERVAL_MS,
-} from '../shared/constants';
+import { DEDUPE_WINDOW_MS, FINISH_NEAR_END_S, GESTURE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../shared/constants';
 import type { PlatformAdapter } from './platforms/types';
 
 export type CardChangeSource = 'url' | 'video';
@@ -71,13 +61,10 @@ export function createDetector(deps: DetectorDeps): Detector {
   const videoIds = new WeakMap<Element, string>();
   let nextVideoId = 0;
 
-  // Tracks how many times the currently-dominant video has played through, so the
-  // next transition away from it can be classified as a skip or not.
+  // Tracks whether the currently-dominant video has played through at least once,
+  // so the next transition away from it can be classified as a skip or not.
   let watchedVideo: HTMLVideoElement | null = null;
   let currentVideoFinished = false;
-  let completions = 0;
-  let lastCompletionAt = -Infinity;
-  let atTail = false; // within FINISH_NEAR_END_S of the end, this pass — edge-triggers a completion
 
   function currentUrl(): URL {
     return new URL(window.location.href);
@@ -99,43 +86,22 @@ export function createDetector(deps: DetectorDeps): Detector {
     if (NAV_KEYS.has(event.key)) markGesture();
   }
 
-  /**
-   * Registers one completed pass, unless it's within FINISH_DEDUPE_MS of the last
-   * one — the native `ended` event and the playback-position fallback can both fire
-   * for the same real completion moments apart, and that must count once, not twice.
-   */
-  function markCompletion(): void {
-    const at = now();
-    if (at - lastCompletionAt < FINISH_DEDUPE_MS) return;
-    lastCompletionAt = at;
-    completions += 1;
-    if (completions >= FINISH_REQUIRED_COMPLETIONS) currentVideoFinished = true;
-  }
-
   function onVideoEnded(): void {
-    markCompletion();
+    currentVideoFinished = true;
   }
 
   function onVideoTimeUpdate(): void {
     const video = watchedVideo;
     if (video === null) return;
     const { currentTime, duration } = video;
-    if (!Number.isFinite(duration) || duration <= 0) return;
-    const nearEnd = currentTime >= duration - FINISH_NEAR_END_S;
-    if (nearEnd && !atTail) {
-      atTail = true;
-      markCompletion();
-    } else if (!nearEnd && currentTime < FINISH_NEAR_END_S) {
-      atTail = false; // wrapped back to the start; the next approach to the end is a new pass
+    if (Number.isFinite(duration) && duration > 0 && currentTime >= duration - FINISH_NEAR_END_S) {
+      currentVideoFinished = true;
     }
   }
 
   function attachWatchTracking(element: Element): void {
     if (!(element instanceof window.HTMLVideoElement)) return;
     watchedVideo = element;
-    completions = 0;
-    lastCompletionAt = -Infinity;
-    atTail = false;
     element.addEventListener('ended', onVideoEnded);
     element.addEventListener('timeupdate', onVideoTimeUpdate);
   }

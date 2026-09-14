@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createDetector, type CardChange } from '../../src/content/detector';
 import { tiktok } from '../../src/content/platforms/tiktok';
 import { youtube } from '../../src/content/platforms/youtube';
-import { DEDUPE_WINDOW_MS, FINISH_DEDUPE_MS, GESTURE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../../src/shared/constants';
+import { DEDUPE_WINDOW_MS, GESTURE_WINDOW_MS, URL_POLL_INTERVAL_MS } from '../../src/shared/constants';
 
 type Callback = (entries: IntersectionObserverEntry[]) => void;
 
@@ -290,10 +290,8 @@ describe('createDetector', () => {
     });
   });
 
-  describe('wasSkip: swiping onward after genuinely finishing a video is not a skip', () => {
-    test("a single 'ended' event is not enough on its own — still a skip", async () => {
-      // A short clip can complete on its own before anyone has decided to stay or
-      // go, so one pass alone can't be told apart from someone about to skip.
+  describe('wasSkip: swiping onward after finishing a video is not a skip', () => {
+    test("swiping away from a video that fired 'ended' is not a skip", async () => {
       build();
       const v1 = addVideo();
       const v2 = addVideo();
@@ -301,49 +299,14 @@ describe('createDetector', () => {
       gesture();
       io().fire([{ target: v1, ratio: 1 }]); // baseline
 
-      v1.dispatchEvent(new Event('ended'));
-
-      gesture();
-      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
-      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
-    });
-
-    test("two 'ended' events, genuinely spaced apart, is not a skip", async () => {
-      build();
-      const v1 = addVideo();
-      const v2 = addVideo();
-      await vi.advanceTimersByTimeAsync(0);
-      gesture();
-      io().fire([{ target: v1, ratio: 1 }]); // baseline
-
-      v1.dispatchEvent(new Event('ended')); // first pass, at clock 0
-      clock += FINISH_DEDUPE_MS + 1;
-      v1.dispatchEvent(new Event('ended')); // a genuinely later, second pass
+      v1.dispatchEvent(new Event('ended')); // watched all the way through
 
       gesture();
       io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
       expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: false }]);
     });
 
-    test("the timeupdate fallback and the 'ended' event firing for the same pass don't double-count", async () => {
-      build();
-      const v1 = addVideo() as HTMLVideoElement & { duration: number; currentTime: number };
-      const v2 = addVideo();
-      await vi.advanceTimersByTimeAsync(0);
-      gesture();
-      io().fire([{ target: v1, ratio: 1 }]); // baseline
-
-      Object.defineProperty(v1, 'duration', { value: 12, configurable: true });
-      Object.defineProperty(v1, 'currentTime', { value: 11.9, configurable: true });
-      v1.dispatchEvent(new Event('timeupdate')); // fallback fires first, moments before the real event
-      v1.dispatchEvent(new Event('ended')); // same completion, reported a second way
-
-      gesture();
-      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
-      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]); // only one real completion
-    });
-
-    test('swiping away before the video ends at all is a skip', async () => {
+    test('swiping away before the video ends is a skip', async () => {
       build();
       const v1 = addVideo();
       const v2 = addVideo();
@@ -356,7 +319,7 @@ describe('createDetector', () => {
       expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
     });
 
-    test("a video using the native loop attribute (no 'ended' event): one pass via playback position is not enough", async () => {
+    test("a video using the native loop attribute (no 'ended' event) is caught by playback position nearing the end", async () => {
       build();
       const v1 = addVideo() as HTMLVideoElement & { duration: number; currentTime: number };
       const v2 = addVideo();
@@ -366,38 +329,14 @@ describe('createDetector', () => {
 
       Object.defineProperty(v1, 'duration', { value: 12, configurable: true });
       Object.defineProperty(v1, 'currentTime', { value: 11.8, configurable: true }); // 0.2s from the end
-      v1.dispatchEvent(new Event('timeupdate')); // first pass completes
-
-      gesture();
-      io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
-      expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]); // only one genuine pass so far
-    });
-
-    test('a second genuine loop, spaced apart, via the playback-position fallback is not a skip', async () => {
-      build();
-      const v1 = addVideo() as HTMLVideoElement & { duration: number; currentTime: number };
-      const v2 = addVideo();
-      await vi.advanceTimersByTimeAsync(0);
-      gesture();
-      io().fire([{ target: v1, ratio: 1 }]);
-
-      Object.defineProperty(v1, 'duration', { value: 12, configurable: true });
-      Object.defineProperty(v1, 'currentTime', { value: 11.8, configurable: true });
-      v1.dispatchEvent(new Event('timeupdate')); // pass 1
-
-      Object.defineProperty(v1, 'currentTime', { value: 0.1, configurable: true });
-      v1.dispatchEvent(new Event('timeupdate')); // wrapped back to the start
-
-      clock += FINISH_DEDUPE_MS + 1;
-      Object.defineProperty(v1, 'currentTime', { value: 11.9, configurable: true });
-      v1.dispatchEvent(new Event('timeupdate')); // pass 2, genuinely later
+      v1.dispatchEvent(new Event('timeupdate'));
 
       gesture();
       io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]);
       expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: false }]);
     });
 
-    test('a timeupdate well short of the end does not mark a pass complete', async () => {
+    test('a timeupdate well short of the end does not mark the video finished', async () => {
       build();
       const v1 = addVideo() as HTMLVideoElement & { duration: number; currentTime: number };
       const v2 = addVideo();
@@ -414,7 +353,7 @@ describe('createDetector', () => {
       expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: true }]);
     });
 
-    test('completion counts reset for each new video, and only reflect the one just left', async () => {
+    test('the finished flag resets for each new video, and only reflects the one just left', async () => {
       build();
       const v1 = addVideo();
       const v2 = addVideo();
@@ -423,28 +362,23 @@ describe('createDetector', () => {
       gesture();
       io().fire([{ target: v1, ratio: 1 }]); // baseline
 
-      v1.dispatchEvent(new Event('ended'));
-      clock += FINISH_DEDUPE_MS + 1;
-      v1.dispatchEvent(new Event('ended')); // v1 watched through twice
-
+      v1.dispatchEvent(new Event('ended')); // v1 watched fully
       gesture();
       io().fire([{ target: v1, ratio: 0 }, { target: v2, ratio: 1 }]); // leaving v1 (finished) -> not a skip
       expect(changes).toEqual([{ source: 'video', id: 'v2', wasSkip: false }]);
 
-      // v2 is abandoned early this time, no ended event at all.
+      // v2 is abandoned early this time, no ended event.
       gesture();
       io().fire([{ target: v2, ratio: 0 }, { target: v3, ratio: 1 }]); // leaving v2 (not finished) -> a skip
       expect(changes[1]).toEqual({ source: 'video', id: 'v3', wasSkip: true });
     });
 
-    test('the URL-source signal is classified using the same completion tracking as the video source', async () => {
+    test('the URL-source signal is classified using the same finished tracking as the video source', async () => {
       build();
       const v1 = addVideo();
       await vi.advanceTimersByTimeAsync(0);
       gesture();
       io().fire([{ target: v1, ratio: 1 }]); // baseline, attaches watch tracking to v1
-      v1.dispatchEvent(new Event('ended'));
-      clock += FINISH_DEDUPE_MS + 1;
       v1.dispatchEvent(new Event('ended'));
 
       gesture();

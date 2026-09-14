@@ -25,11 +25,8 @@ async function swipe(times: number): Promise<void> {
 type FixtureWindow = Window & { __cadenceFixture: { finishCurrentVideo(): void; loopCurrentVideo(): void } };
 
 /** Watches the current card through to the end, then swipes onward — not a skip. */
-/** Watching a clip through requires two genuine, spaced-apart completions — see FINISH_REQUIRED_COMPLETIONS. */
 async function watchToEndAndSwipe(times: number): Promise<void> {
   for (let i = 0; i < times; i += 1) {
-    await harness.page.evaluate(() => (window as unknown as FixtureWindow).__cadenceFixture.finishCurrentVideo());
-    await harness.page.waitForTimeout(1100); // longer than FINISH_DEDUPE_MS, so this is a distinct pass
     await harness.page.evaluate(() => (window as unknown as FixtureWindow).__cadenceFixture.finishCurrentVideo());
     await harness.page.mouse.wheel(0, 600);
     await harness.page.waitForTimeout(60);
@@ -113,11 +110,9 @@ test('watching a video through and swiping onward does not count against the lim
   expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(9);
   await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
 
-  // A few videos, each watched through twice before swiping onward — the platform's
-  // required way to move on, not a skip. The exact 8-skips-in-30 arithmetic from the
-  // request is verified precisely in session.test.ts and controller.test.ts; this
-  // only needs to prove the mechanism holds end-to-end in the real extension.
-  await watchToEndAndSwipe(3);
+  // Twenty videos, each watched to the end before swiping onward — the platform's
+  // required way to move on, not a skip.
+  await watchToEndAndSwipe(20);
   expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(9);
   await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
 
@@ -128,10 +123,10 @@ test('watching a video through and swiping onward does not count against the lim
   expect(events[1]?.swipeCount).toBe(10);
 });
 
-test('watched-through videos among real skips never show the checkpoint below the threshold', async () => {
+test('the example from the request: 8 real skips among 30 total videos never show the checkpoint', async () => {
   await open('https://www.tiktok.com/foryou');
   await swipe(8);
-  await watchToEndAndSwipe(4);
+  await watchToEndAndSwipe(22);
   expect((await harness.getStorage<{ swipeCount: number }>('session'))?.swipeCount).toBe(8);
   await expect(harness.page.locator(OVERLAY)).toHaveCount(0);
 });
